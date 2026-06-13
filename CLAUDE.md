@@ -6,77 +6,65 @@ Across the Spark North East Link infrastructure project, mechanical, electrical,
 
 Instead of managing the entire macro-lifecycle of a permit (such as the initial permit drafting or high-level client approval workflows), this platform focuses exclusively on on-site execution, live field sign-offs, and dynamic workforce attendance tracking.
 
-## Business Requirements
+## Functional Requirements
 
-- Build platform to support on-site execution, live field sign-offs, and dynamic workforce attendance tracking, a part of a permit retrieved from an external platform (Hexagon Smart Completions).
-- Focus on Mobile and Tablet versions. However, user can view in desktop mode.
-- There are 2 roles: Permit Holder and Worker. The login screen provides 2 options. Permit Holder can login to the application, for mvp, mock username is sufficient. Worker can login via 6-digit number. For prototype purpose, once login, the user logo is visible on the top right, system remembers users upto 6 users.
-### User flow
-- There are 3 Permit Type, depending on it, each Permit will have different flow:
-    - Commissioning Minor Works (CMW): Create Isolation Task -> Collect Signatures per Task -> Daily Revalidation -> Workers Sign-on / Sign-off -> Daily Relinquishment -> Closure Permit
-    - Commissioning Access Permit (Non-Isolation): Daily Revalidation -> Workers Sign-on / Sign-off -> Daily Relinquishment -> Closure Permit
-    - Commissioning Access Permit (Isolation): Daily Revalidation -> Workers Sign-on / Sign-off -> Daily Relinquishment -> Closure Permit
+The platform supports on-site execution, live field sign-offs, and dynamic workforce attendance tracking for permits retrieved from an external platform (Hexagon Smart Completions).
 
-### For Permit Holder
-- User can select login as Permit Holder and enter user name to login.
-- User can create Isolation Task. 
-- In beginning of each shift, user can collect signatures for each Task by showing QR Code for a worker to scan and click Sign On prior to open the shift (Sign on for Daily Revalidation)
-- User can show QR Code for that shift to workers to sign on and sign off. User can monitor all data.
-- User can close the shift (Sign off for Daily Relinquisment). Condition: All workers are signed off.
-- User can close the permit by clicking on the Closure button (confirmation pop-up required). Once the permit is closed, user no longer modified the permit but can view data.
+### Permit Type Flows
+Three permit types determine the workflow:
+- CMW: Create Isolation Task -> Collect Signatures per Task -> Daily Revalidation -> Workers Sign-on / Sign-off -> Daily Relinquishment -> Close Permit
+- CAP (Non-Isolation): Daily Revalidation -> Workers Sign-on / Sign-off -> Daily Relinquishment -> Close Permit
+- CAP (Isolation): Daily Revalidation -> Workers Sign-on / Sign-off -> Daily Relinquishment -> Close Permit
 
-### For Worker
-- User can select login as Worker and enter 6-digit number to login.
-- User can scan the QR Code for signing on for an isolation task
-- User can scan the QR Code for signing on and signing off for a shift.
+### Permit Holder Use Cases
+1. **Login**: Log in with a username. System stores the session for quick-switching.
+2. **Create Permit**: Create a new permit by selecting type (CMW, CAP Non-Isolation, CAP Isolation) and entering a title. Permit holder is automatically assigned.
+3. **Create Isolation Task** (CMW only): Create tasks with a name and multiple isolation points. Each task generates a QR code for workers to scan and sign off all unsigned points at once.
+4. **Daily Revalidation (Shift Start)**: Sign on to begin a new shift. This opens the shift so workers can sign on. A QR code is displayed for workers to scan.
+5. **Monitor Worker Attendance**: View all workers currently signed on or off for the active shift. Each worker shows their latest state with expandable sign-on/off history.
+6. **Daily Relinquishment (Shift Close)**: Close the current shift. All workers must be signed off before the permit holder can relinquish. Once closed, workers can no longer sign on or off.
+7. **Close Permit**: Close the permit with a confirmation prompt. All shifts must be closed first. Once closed, the permit becomes read-only but data remains viewable.
+8. **View Permit History**: View past shifts and worker records for any permit, including closed permits.
 
+### Worker Use Cases
+1. **Login**: Log in with a 6-digit worker ID. System generates a random full name and stores the session.
+2. **Scan to Access Permits**: The Scan page shows buttons per active permit. Workers cannot directly navigate to permits; they access specific sections only through scan-based buttons.
+3. **Sign Off Isolation Task** (CMW only): Navigate via [Isolation task for {permit name}] button. View all isolation tasks and sign off unsigned tasks. After signing, a [Go to Permit] button navigates to the shift sign-on/off page.
+4. **Sign On to Shift**: Navigate via [Permit {permit name}] button. Sign on to the current shift when it is open. Can sign on and off multiple times per shift.
+5. **Sign Off from Shift**: Sign off from the current shift. The sign-off button is only enabled when the worker is currently signed on.
+6. **View Related Documents**: From the shift sign-on/off page, access related safety documents as clickable hyperlinks (e.g., Safety Procedures, Isolation Procedures, Emergency Response Plans, Work Method Statements, Risk Assessments).
 
-### Permit Type Behavior
-1. Commissioning Minor Works (CMW)
-- Permit Holder data entry (editing Permit details)
-- Isolation Record verification by one authorised personnel (authorised personnel is one selected member from the work crew)
-- Permit acceptance by Permit Holder (Daily Revalidation / Daily Relinquishment )
-- Permit Holder transfer
-
-- Work Crew Sign-On / Sign-Off
-2 Commissioning Access Permit (Non-Isolation)
-- Permit Holder data entry
-- Permit acceptance by Permit Holder (Daily Revalidation / Daily Relinquishment)
-- Permit Holder transfer
-- Work Crew Sign-On / Sign-Off
-3. Commissioning Access Permit (Isolation)
-- Permit Holder data entry
-- Permit acceptance by Permit Holder (Daily Revalidation/ Daily Relinquishment)
-- Permit Holder transfer
-- Work Crew Sign-On / Sign-Off
-
-## Core Functional Scope
-The platform provides a highly optimized, mobile-first interface designed to digitize and manage five critical field operational milestones:
-### Isolation Task Verification (Lockout/LOTO):
-- Provide a place for Permit Holder to create Task, including task name, multiple isolation points. Show QR code for worker to scan and sign on.
-- Provide a place for worker (in charge) to scan and sign on. Worker (in charge): the login user scanning the QR Code. For MVP, any worker scanning the QR can sign (simplified from "one authorised personnel").
-### Daily Revalidation (Sign-on): 
-- Permit Holder sign on prior to generate QR Code for workers to scan to sign on and sign off
-### Daily Relinquishment (Sign-off):
-- Permit Holder signs off to close the shift. All workers must have signed off before the Permit Holder can relinquish. After relinquishment, the shift is closed and workers can no longer sign on or off.
-
-### Worker Sign on / Worker Sign off
-Worker scans QR Code to sign on / sign off during the working time. Can be sign on / sign off multiple times
-
-## MVP
-- User no need to scan a real QR code. Simulate process by displaying a Scan button.
-- Once user logging in using username (Permit holder) or 6-digit number (Worker), randomly make up user's full name, display in the UI with the 6-digit number or user name, and store user information in database. So end-user can switch between accounts by selecting a down arrow icon next to the avatar on the top right.
+### Business Rules
+- Workers cannot directly view or navigate to permit detail pages; they access only via Scan page buttons.
+- Each sign-on creates a history record. UI shows each worker once with their latest state, with an option to expand full history.
 - Permit Holder Transfer is out of scope for MVP.
-- Each sign-on creates a history record. UI shows worker once with latest state, with option to view full history.
+- QR code scanning is simulated via buttons for MVP (no real QR scanning required).
+
+## Non-Functional Requirements
+
+- **Mobile-first responsive design**: Primary targets are mobile and tablet; desktop is viewable but secondary.
+- **Performance**: Fast load times for field use. No heavy client-side computation. Database queries must be efficient.
+- **Data persistence**: All data stored in SQLite via Prisma. No data loss on server restart.
+- **Session management**: System remembers up to 6 users for quick account switching via header avatar dropdown.
+- **Offline resilience**: Not required for MVP. Assumes reliable on-site connectivity.
+- **Security**: No authentication for MVP. Role-based access enforced on frontend only (route guards). API routes do not enforce auth.
+- **Accessibility**: Touch-friendly targets (minimum 44px). Clear visual states for sign-on/off. High-contrast color scheme per project palette.
+- **Browser support**: Modern evergreen browsers (Chrome, Safari, Edge). No IE11 support.
+- **Maintainability**: Minimal dependencies. Use popular, well-maintained libraries. Simple codebase structure with clear separation of concerns.
+
+## MVP Scope
+- QR code scanning simulated via buttons (no real QR scanning required).
+- User names are randomly generated on login. System stores sessions for quick account switching (up to 6 users via header avatar dropdown).
+- Permit Holder Transfer is out of scope.
+- No real authentication or user management.
 
 ## Technical Details
 
-- Implemented as a modern NextJS app, client rendered
-- The NextJS app should be created in a subdirectory `frontend`
-- No user management for the MVP
-- Use popular libraries
-- As simple as possible but with an elegant UI
-- Must have database to store data
+- Next.js 15 app (webpack, not Turbopack - Turbopack has issues with Prisma SQLite), client rendered
+- Prisma 6 with native SQLite engine (Prisma 7 requires driver adapters that block event loop)
+- App lives in `frontend/` subdirectory
+- Zustand for client-side UI state only (no server state management)
+- shadcn/ui with base-ui (NOT Radix UI) - uses `render` prop for element composition, not `asChild`
 
 ## Color Scheme
 
@@ -121,7 +109,9 @@ sparkpermitcheck/
 │   │   │   ├── permits/
 │   │   │   │   ├── page.tsx    # Permits list
 │   │   │   │   └── [id]/page.tsx  # Permit detail
-│   │   │   ├── scan/page.tsx   # Worker scan
+│   │   │   ├── scan/page.tsx   # Worker scan (permit-based buttons)
+│   │   │   ├── scan/task/page.tsx    # Worker isolation task sign-off
+│   │   │   ├── scan/permit/page.tsx  # Worker shift sign-on/off + documents
 │   │   │   ├── layout.tsx
 │   │   │   └── globals.css
 │   │   ├── components/
