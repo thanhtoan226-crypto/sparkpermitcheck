@@ -146,6 +146,14 @@ Build a mobile-first digital permit execution and workforce attendance tracking 
 - [x] Confirmation dialog with warning
 - [x] Server-side validation: rejects close if any shifts are not closed
 
+### 4.6 Shift History Section
+- [x] Dedicated card below Current Shift, separate from the active shift view
+- [x] Shows only closed shifts (not the current/open shift)
+- [x] Each row: shift number (1-based), date, start time, end time, worker count
+- [x] Start/end times sourced from new `startedAt`/`endedAt` fields on Shift model (written at holder sign-on/sign-off)
+- [x] Displays "—" gracefully for shifts with null timestamps (pre-migration data)
+- [x] DB migration `add_shift_timestamps` adds nullable `startedAt String?` and `endedAt String?` to Shift
+
 **Success Criteria**: Full permit lifecycle works for all 3 permit types. Data persists across page reloads. **PASS**
 
 ---

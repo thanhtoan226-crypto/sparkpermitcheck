@@ -25,6 +25,7 @@ Three permit types determine the workflow:
 6. **Daily Relinquishment (Shift Close)**: Close the current shift. All workers must be signed off before the permit holder can relinquish. Once closed, workers can no longer sign on or off.
 7. **Close Permit**: Close the permit with a confirmation prompt. All shifts must be closed first. Once closed, the permit becomes read-only but data remains viewable.
 8. **View Permit History**: View past shifts and worker records for any permit, including closed permits.
+9. **View Shift History**: On the permit detail page, a dedicated Shift History card shows all closed shifts with their shift number, date, start time, end time, and worker count. Only closed shifts appear here; the active/current shift is shown separately in the Current Shift section.
 
 ### Worker Use Cases
 1. **Login**: Log in with a 6-digit worker ID. System generates a random full name and stores the session.
@@ -37,6 +38,7 @@ Three permit types determine the workflow:
 ### Business Rules
 - Workers cannot directly view or navigate to permit detail pages; they access only via Scan page buttons.
 - Each sign-on creates a history record. UI shows each worker once with their latest state, with an option to expand full history.
+- Shift start time is recorded when the permit holder signs on (Daily Revalidation). Shift end time is recorded when the permit holder signs off (Daily Relinquishment).
 - Permit Holder Transfer is out of scope for MVP.
 - QR code scanning is simulated via buttons for MVP (no real QR scanning required).
 
