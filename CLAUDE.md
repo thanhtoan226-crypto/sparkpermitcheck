@@ -11,7 +11,7 @@ Instead of managing the entire macro-lifecycle of a permit (such as the initial 
 The platform supports on-site execution, live field sign-offs, and dynamic workforce attendance tracking for permits retrieved from an external platform (Hexagon Smart Completions).
 
 ### Permit Type Flows
-Three permit types determine the workflow:
+Three permit types determine the workflow. The type is a display label on the permit; CAP (Non-Isolation) and CAP (Isolation) have identical flows.
 - CMW: Create Isolation Task -> Collect Signatures per Task -> Daily Revalidation -> Workers Sign-on / Sign-off -> Daily Relinquishment -> Close Permit
 - CAP (Non-Isolation): Daily Revalidation -> Workers Sign-on / Sign-off -> Daily Relinquishment -> Close Permit
 - CAP (Isolation): Daily Revalidation -> Workers Sign-on / Sign-off -> Daily Relinquishment -> Close Permit
@@ -19,7 +19,7 @@ Three permit types determine the workflow:
 ### Permit Holder Use Cases
 1. **Login**: Log in with a username. System stores the session for quick-switching.
 2. **Create Permit**: Create a new permit by selecting type (CMW, CAP Non-Isolation, CAP Isolation) and entering a title. Permit holder is automatically assigned.
-3. **Create Isolation Task** (CMW only): Create tasks with a name and multiple isolation points. Each task generates a QR code for workers to scan and sign off all unsigned points at once.
+3. **Create Isolation Task** (CMW only): Create tasks with a name and multiple isolation points. User can generates a QR code for workers to scan and sign off all unsigned tasks.
 4. **Daily Revalidation (Shift Start)**: Sign on to begin a new shift. This opens the shift so workers can sign on. A QR code is displayed for workers to scan.
 5. **Monitor Worker Attendance**: View all workers currently signed on or off for the active shift. Each worker shows their latest state with expandable sign-on/off history.
 6. **Daily Relinquishment (Shift Close)**: Close the current shift. All workers must be signed off before the permit holder can relinquish. Once closed, workers can no longer sign on or off.
@@ -29,18 +29,62 @@ Three permit types determine the workflow:
 
 ### Worker Use Cases
 1. **Login**: Log in with a 6-digit worker ID. System generates a random full name and stores the session.
-2. **Scan to Access Permits**: The Scan page shows buttons per active permit. Workers cannot directly navigate to permits; they access specific sections only through scan-based buttons.
+2. **Scan to Access Permits**: The Scan page shows all permits. Tapping a permit button routes based on its status:
+   - `draft` (CMW only) → Inline error: permit not ready
+   - `isolation_pending` (CMW) → Isolation task sign-off page
+   - `active` / `shift_open` → Shift sign-on/off page
+   - `shift_closed` / `closed` → Inline error: cannot access
+   Workers cannot directly navigate to permit detail pages; they access only via the Scan page.
 3. **Sign Off Isolation Task** (CMW only): Navigate via [Isolation task for {permit name}] button. View all isolation tasks and sign off unsigned tasks. After signing, a [Go to Permit] button navigates to the shift sign-on/off page.
 4. **Sign On to Shift**: Navigate via [Permit {permit name}] button. Sign on to the current shift when it is open. Can sign on and off multiple times per shift.
 5. **Sign Off from Shift**: Sign off from the current shift. The sign-off button is only enabled when the worker is currently signed on.
 6. **View Related Documents**: From the shift sign-on/off page, access related safety documents as clickable hyperlinks (e.g., Safety Procedures, Isolation Procedures, Emergency Response Plans, Work Method Statements, Risk Assessments).
 
 ### Business Rules
-- Workers cannot directly view or navigate to permit detail pages; they access only via Scan page buttons.
+- Workers cannot directly view or navigate to permit detail pages; they access only via the Scan page.
 - Each sign-on creates a history record. UI shows each worker once with their latest state, with an option to expand full history.
 - Shift start time is recorded when the permit holder signs on (Daily Revalidation). Shift end time is recorded when the permit holder signs off (Daily Relinquishment).
 - Permit Holder Transfer is out of scope for MVP.
 - QR code scanning is simulated via buttons for MVP (no real QR scanning required).
+- Always show the latest sign-off or sign-on for Isolation task, Daily Revalidation, Daily Relinquishment, Worker's sign-ons, Worker's sign-offs.
+- User can only revalidate permit when all isolation tasks' signatures are collected.
+- User can only close permit when all the permit is relinquished.
+
+### Permit Statuses
+
+CMW flow:
+```
+                        ┌────── Daily Revalidation (Starts Shift) ──────────┐
+                        │                                                   │
+[draft] ──> [isolation_pending] ──> [active] ──> [daily_revalidated] ──> [daily_relinquished] ──> [closed]
+```
+
+CAP (Non-Isolation) and CAP (Isolation) flow:
+```
+                          ┌───── Daily Revalidation (Starts Shift) ───────┐
+                          │                                               │
+                       [active] ──> [daily_revalidated] ──> [daily_relinquished] ──> [closed]
+```
+
+Status descriptions:
+- `draft`: CMW only. Permit created, isolation tasks not yet added.
+- `isolation_pending`: CMW only. Isolation tasks exist; workers need to sign off all points.
+- `active`: All isolation signed (CMW) or initial state (CAP). Revalidation can begin.
+- `daily_revalidated`: Permit holder has signed on (Revalidate permit); workers can sign on/off. Display label: "Daily Revalidated".
+- `daily_relinquished`: Permit holder has signed off (Relinquish permit). Shift ended. Display label: "Daily Relinquished".
+- `closed`: Permit holder has closed the permit. Read-only.
+
+### Permit section hierarchy
+For Permit Holder
+- Permit details (name, status, permit holder, etc.)
+- Isolation tasks (if CMW)
+- Daily Revalidation, Daily Relinquishment. Button [View current shift], [view history] => Redirect to detail page.
+- Documents
+
+For Worker
+- Permit details (name, status, permit holder, etc.)
+- Isolation tasks (if CMW)
+- Documents
 
 ## Non-Functional Requirements
 
@@ -59,14 +103,15 @@ Three permit types determine the workflow:
 - User names are randomly generated on login. System stores sessions for quick account switching (up to 6 users via header avatar dropdown).
 - Permit Holder Transfer is out of scope.
 - No real authentication or user management.
+- Display random 1 - 3 document hyperlinks in documents section. Click to open a new blank tab.
 
 ## Technical Details
 
-- Next.js 15 app (webpack, not Turbopack - Turbopack has issues with Prisma SQLite), client rendered
+- Next.js 15 app (webpack, not Turbopack — Turbopack has issues with Prisma SQLite), client rendered
 - Prisma 6 with native SQLite engine (Prisma 7 requires driver adapters that block event loop)
 - App lives in `frontend/` subdirectory
 - Zustand for client-side UI state only (no server state management)
-- shadcn/ui with base-ui (NOT Radix UI) - uses `render` prop for element composition, not `asChild`
+- shadcn/ui components; uses `render` prop for element composition (not `asChild`)
 
 ## Color Scheme
 
@@ -78,10 +123,10 @@ Three permit types determine the workflow:
 
 ## Strategy
 
-1. Write plan with success criteria for each phase to be checked off. Include project scaffolding, including .gitignore, and rigorous unit testing.
-2. Execute the plan ensuring all critiera are met
-3. Carry out extensive integration testing with Playwright or similar, fixing defects
-4. Only complete when the MVP is finished and tested, with the server running and ready for the user
+1. Write plan with success criteria for each phase to be checked off. Include project scaffolding and .gitignore.
+2. Execute the plan ensuring all criteria are met.
+3. Carry out integration testing with Playwright or similar, fixing defects.
+4. Only complete when the MVP is finished and tested, with the server running and ready for the user.
 
 ## Coding standards
 
@@ -93,7 +138,7 @@ Three permit types determine the workflow:
 sparkpermitcheck/
 ├── CLAUDE.md
 ├── tasks/
-│   └── plan.md
+│   └── plan(archived).md
 ├── frontend/                    # Next.js app
 │   ├── prisma/
 │   │   └── schema.prisma       # Database schema
@@ -126,7 +171,6 @@ sparkpermitcheck/
 │   │       ├── types.ts
 │   │       ├── constants.ts
 │   │       ├── names.ts        # Random name generator
-│   │       ├── qr-utils.ts     # QR encode/decode
 │   │       └── utils.ts        # cn() utility
 │   ├── package.json
 │   └── .env                    # DATABASE_URL
