@@ -3,8 +3,9 @@ import { v4 as uuidv4 } from "uuid";
 import { prisma } from "@/lib/db";
 
 type ShiftAction =
-  | { action: "start_revalidation" }
+  | { action: "issuer_sign_on" }
   | { action: "holder_sign_on"; shiftId: string }
+  | { action: "issuer_sign_off"; shiftId: string }
   | { action: "holder_sign_off"; shiftId: string }
   | { action: "worker_sign_on"; shiftId: string; workerId: string }
   | { action: "worker_sign_off"; shiftId: string; workerId: string };
@@ -15,11 +16,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const body = (await req.json()) as ShiftAction;
 
     switch (body.action) {
-      case "start_revalidation": {
+      case "issuer_sign_on": {
         const permit = await prisma.permit.findUnique({
           where: { id: permitId },
           include: {
-            isolationTasks: { include: { isolationPoints: true } },
+            isolationTasks: true,
             shifts: true,
           },
         });
@@ -31,27 +32,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const closedShiftCount = permit.shifts.filter((s) => s.status === "closed").length;
 
           if (closedShiftCount === 0) {
-            // First revalidation: check original IsolationPoint signatures
             const allSigned =
               permit.isolationTasks.length > 0 &&
               permit.isolationTasks.every((t) =>
-                t.isolationPoints.every((pt) => pt.signedBy !== null)
+                t.isolatedById !== null && t.verifiedById !== null
               );
             if (!allSigned) {
               return NextResponse.json(
-                { error: "All isolation points must be signed first" },
+                { error: "All isolation tasks must be signed first" },
                 { status: 400 }
               );
             }
           } else {
-            // Subsequent revalidations: check ShiftIsolationConfirmations for current cycle
             const cycleNumber = closedShiftCount;
             const confirmations = await prisma.shiftIsolationConfirmation.findMany({
               where: { permitId, cycleNumber },
             });
             const allConfirmed =
               confirmations.length > 0 &&
-              confirmations.every((c) => c.signedBy !== null);
+              confirmations.every((c) => c.isolatedById !== null && c.verifiedById !== null);
             if (!allConfirmed) {
               return NextResponse.json(
                 { error: "All isolation tasks must be re-confirmed for this cycle" },
@@ -61,32 +60,42 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }
         }
 
-        const shift = await prisma.shift.create({
+        const now = new Date().toISOString();
+        await prisma.shift.create({
           data: {
             id: uuidv4(),
-            date: new Date().toISOString().split("T")[0],
+            date: now.split("T")[0],
             status: "revalidation_pending",
-            permitHolderSignedOn: false,
-            permitHolderSignedOff: false,
-            createdAt: new Date().toISOString(),
+            permitIssuerSignedOn: true,
+            createdAt: now,
             permitId,
           },
-          include: { workers: { include: { user: true } } },
         });
-        await prisma.permit.update({ where: { id: permitId }, data: { status: "active" } });
-        return NextResponse.json(shift);
+        // We don't update permit status yet, wait for holder
+        return NextResponse.json({ ok: true });
       }
 
       case "holder_sign_on": {
+        const shift = await prisma.shift.findUnique({ where: { id: body.shiftId } });
+        if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
+        if (!shift.permitIssuerSignedOn) {
+          return NextResponse.json({ error: "Issuer must sign on first" }, { status: 400 });
+        }
+
+        const now = new Date().toISOString();
         await prisma.shift.update({
           where: { id: body.shiftId },
-          data: { permitHolderSignedOn: true, status: "open", startedAt: new Date().toISOString() },
+          data: {
+            permitHolderSignedOn: true,
+            status: "open",
+            startedAt: now,
+          },
         });
         await prisma.permit.update({ where: { id: permitId }, data: { status: "shift_open" } });
         return NextResponse.json({ ok: true });
       }
 
-      case "holder_sign_off": {
+      case "issuer_sign_off": {
         const shift = await prisma.shift.findUnique({
           where: { id: body.shiftId },
           include: { workers: true },
@@ -101,34 +110,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           );
         }
 
-        // Close the shift
+        await prisma.shift.update({
+          where: { id: body.shiftId },
+          data: { permitIssuerSignedOff: true },
+        });
+        return NextResponse.json({ ok: true });
+      }
+
+      case "holder_sign_off": {
+        const shift = await prisma.shift.findUnique({
+          where: { id: body.shiftId },
+        });
+        if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
+        if (!shift.permitIssuerSignedOff) {
+          return NextResponse.json({ error: "Issuer must sign off first" }, { status: 400 });
+        }
+
         await prisma.shift.update({
           where: { id: body.shiftId },
           data: { permitHolderSignedOff: true, status: "closed", endedAt: new Date().toISOString() },
         });
         await prisma.permit.update({ where: { id: permitId }, data: { status: "shift_closed" } });
-
-        // For CMW: create per-shift isolation confirmation rows for the next cycle
-        const permit = await prisma.permit.findUnique({
-          where: { id: permitId },
-          include: { isolationTasks: true, shifts: true },
-        });
-
-        if (permit?.type === "CMW" && permit.isolationTasks.length > 0) {
-          // cycleNumber = number of closed shifts after this one closes
-          const closedShiftCount = permit.shifts.filter((s) => s.status === "closed").length + 1;
-
-          await prisma.shiftIsolationConfirmation.createMany({
-            data: permit.isolationTasks.map((task) => ({
-              id: uuidv4(),
-              permitId,
-              isolationTaskId: task.id,
-              cycleNumber: closedShiftCount,
-              signedBy: null,
-              signedAt: null,
-            })),
-          });
-        }
 
         return NextResponse.json({ ok: true });
       }
@@ -141,9 +143,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
         if (shift.status !== "open") {
           return NextResponse.json({ error: "Shift is not open for sign-on" }, { status: 400 });
-        }
-        if (!shift.permitHolderSignedOn) {
-          return NextResponse.json({ error: "Permit holder must sign on first" }, { status: 400 });
         }
 
         const alreadyOn = shift.workers.find(

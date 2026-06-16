@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(user);
     }
 
-    const existing = await prisma.user.findFirst({ where: { role: "permit_holder", name: value } });
+    const existing = await prisma.user.findFirst({ where: { role: "spark_user", name: value } });
     if (existing) return NextResponse.json(existing);
 
     const count = await prisma.user.count();
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await prisma.user.create({
-      data: { id: uuidv4(), role: "permit_holder", name: value, avatarColor: AVATAR_COLORS[count % AVATAR_COLORS.length] },
+      data: { id: uuidv4(), role: "spark_user", name: value, avatarColor: AVATAR_COLORS[count % AVATAR_COLORS.length] },
     });
     return NextResponse.json(user);
   } catch {

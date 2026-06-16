@@ -125,7 +125,7 @@ export default function ScanPermitPage({
 
   if (!permit) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="page-shell">
         <Header />
         <div className="flex items-center justify-center py-20">
           <p className="text-spark-gray">Loading...</p>
@@ -156,9 +156,9 @@ export default function ScanPermitPage({
   const isCurrentlySignedOn = !!(myLatestRecord && !myLatestRecord.signedOffAt);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="page-shell">
       <Header />
-      <div className="px-4 py-6 max-w-lg mx-auto">
+      <div className="page-content">
         <button
           onClick={() => router.push("/scan")}
           className="flex items-center gap-1 text-spark-blue text-sm font-medium mb-2"

@@ -24,9 +24,10 @@ export async function GET(req: NextRequest) {
     const permits = await prisma.permit.findMany({
       include: {
         permitHolder: true,
-        isolationTasks: { include: { isolationPoints: { include: { signer: true } } } },
+        permitIssuer: true,
+        isolationTasks: { include: { isolatedBy: true, verifiedBy: true, isolationPoints: { include: { signer: true } } } },
         shifts: { include: { workers: { include: { user: true } } }, orderBy: { id: "asc" } },
-        shiftIsolationConfirmations: { include: { signer: true }, orderBy: { cycleNumber: "asc" } },
+        shiftIsolationConfirmations: { include: { isolatedBy: true, verifiedBy: true }, orderBy: { cycleNumber: "asc" } },
       },
       orderBy: { id: "desc" },
     });
@@ -39,10 +40,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { type, title, holderId } = body as { type: string; title: string; holderId: string };
+    const { type, title, holderId, issuerId } = body as { type: string; title: string; holderId: string; issuerId: string };
 
-    if (!title?.trim() || !holderId) {
-      return NextResponse.json({ error: "Title and holderId required" }, { status: 400 });
+    if (!title?.trim() || !holderId || !issuerId) {
+      return NextResponse.json({ error: "Title, holderId, and issuerId required" }, { status: 400 });
     }
 
     const initialStatus = type === "CMW" ? "draft" : "active";
@@ -54,10 +55,12 @@ export async function POST(req: NextRequest) {
         title: title.trim(),
         status: initialStatus,
         permitHolderId: holderId,
+        permitIssuerId: issuerId,
         createdAt: new Date().toISOString(),
       },
       include: {
         permitHolder: true,
+        permitIssuer: true,
         isolationTasks: { include: { isolationPoints: true } },
         shifts: { include: { workers: { include: { user: true } } } },
       },

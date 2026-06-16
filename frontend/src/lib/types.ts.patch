@@ -1,0 +1,60 @@
+--- src/lib/types.ts
++++ src/lib/types.ts
+@@ -1,4 +1,4 @@
+-export type UserRole = "permit_holder" | "worker";
++export type UserRole = "spark_user" | "worker";
+ 
+ export type PermitType = "CMW" | "CAP_NON_ISOLATION" | "CAP_ISOLATION";
+ 
+@@ -34,14 +34,20 @@
+ export type IsolationTaskData = {
+   id: string;
+   name: string;
++  isolatedById: string | null;
++  isolatedAt: string | null;
++  isolatedBy: { id: string; name: string } | null;
++  verifiedById: string | null;
++  verifiedAt: string | null;
++  verifiedBy: { id: string; name: string } | null;
+   isolationPoints: IsolationPointData[];
+ };
+ 
+ export type ShiftIsolationConfirmationData = {
+   id: string;
+   isolationTaskId: string;
+   cycleNumber: number;
+-  signedBy: string | null;
+-  signedAt: string | null;
+-  signer: { id: string; name: string } | null;
++  isolatedById: string | null;
++  isolatedAt: string | null;
++  isolatedBy: { id: string; name: string } | null;
++  verifiedById: string | null;
++  verifiedAt: string | null;
++  verifiedBy: { id: string; name: string } | null;
+ };
+ 
+@@ -58,8 +64,10 @@
+   id: string;
+   date: string;
+-  status: string;
++  status: "revalidation_pending" | "open" | "closed" | string;
++  permitIssuerSignedOn: boolean;
++  permitIssuerSignedOff: boolean;
+   permitHolderSignedOn: boolean;
+   permitHolderSignedOff: boolean;
+   startedAt: string | null;
+@@ -75,6 +83,7 @@
+   closedAt: string | null;
+   createdAt: string;
+   permitHolder: { id: string; name: string; avatarColor: string };
++  permitIssuer?: { id: string; name: string; avatarColor: string };
+   isolationTasks: IsolationTaskData[];
+   shifts: ShiftData[];
+   shiftIsolationConfirmations: ShiftIsolationConfirmationData[];
+@@ -85,5 +94,6 @@
+   title: string;
+   status: string;
+   permitHolderId: string;
++  permitIssuerId?: string;
+ };

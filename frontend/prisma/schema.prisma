@@ -9,15 +9,21 @@ datasource db {
 
 model User {
   id          String  @id
-  role        String  // "permit_holder" | "worker"
+  role        String  // "spark_user" | "worker"
   name        String
   avatarColor String
   workerId    String? // 6-digit number for workers
 
-  permits                    Permit[]
+  heldPermits                Permit[] @relation("PermitHolder")
+  issuedPermits              Permit[] @relation("PermitIssuer")
   signedPoints               IsolationPoint[]
   shifts                     ShiftWorker[]
-  shiftIsolationConfirmations ShiftIsolationConfirmation[]
+  
+  shiftIsolationConfirmationsIsolated ShiftIsolationConfirmation[] @relation("IsolatedBy")
+  shiftIsolationConfirmationsVerified ShiftIsolationConfirmation[] @relation("VerifiedBy")
+  
+  isolatedTasks IsolationTask[] @relation("IsolatedByTask")
+  verifiedTasks IsolationTask[] @relation("VerifiedByTask")
 }
 
 model Permit {
@@ -26,7 +32,9 @@ model Permit {
   title          String
   status         String   // "draft" | "isolation_pending" | "active" | "shift_open" | "shift_closed" | "closed"
   permitHolderId String
-  permitHolder   User     @relation(fields: [permitHolderId], references: [id])
+  permitHolder   User     @relation("PermitHolder", fields: [permitHolderId], references: [id])
+  permitIssuerId String
+  permitIssuer   User     @relation("PermitIssuer", fields: [permitIssuerId], references: [id])
   closedAt       String?
 
   isolationTasks              IsolationTask[]
@@ -41,6 +49,14 @@ model IsolationTask {
   name     String
   permitId String
   permit   Permit @relation(fields: [permitId], references: [id])
+
+  isolatedById String?
+  isolatedBy   User?   @relation("IsolatedByTask", fields: [isolatedById], references: [id])
+  isolatedAt   String?
+  
+  verifiedById String?
+  verifiedBy   User?   @relation("VerifiedByTask", fields: [verifiedById], references: [id])
+  verifiedAt   String?
 
   isolationPoints             IsolationPoint[]
   shiftIsolationConfirmations ShiftIsolationConfirmation[]
@@ -61,7 +77,9 @@ model Shift {
   id                    String  @id
   date                  String
   status                String  // "revalidation_pending" | "open" | "closed"
+  permitIssuerSignedOn  Boolean @default(false)
   permitHolderSignedOn  Boolean @default(false)
+  permitIssuerSignedOff Boolean @default(false)
   permitHolderSignedOff Boolean @default(false)
   startedAt             String?
   endedAt               String?
@@ -89,7 +107,12 @@ model ShiftIsolationConfirmation {
   isolationTaskId String
   isolationTask   IsolationTask @relation(fields: [isolationTaskId], references: [id])
   cycleNumber     Int     // 1 = after shift 1 closes, 2 = after shift 2 closes, etc.
-  signedBy        String?
-  signedAt        String?
-  signer          User?   @relation(fields: [signedBy], references: [id])
+  
+  isolatedById    String?
+  isolatedBy      User?   @relation("IsolatedBy", fields: [isolatedById], references: [id])
+  isolatedAt      String?
+
+  verifiedById    String?
+  verifiedBy      User?   @relation("VerifiedBy", fields: [verifiedById], references: [id])
+  verifiedAt      String?
 }

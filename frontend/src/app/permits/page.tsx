@@ -15,7 +15,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import useStore from "@/lib/store";
-import type { PermitType, PermitSummary } from "@/lib/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { PermitType, PermitSummary, SessionUser } from "@/lib/types";
 import { PERMIT_TYPE_LABELS } from "@/lib/constants";
 import { Plus, ClipboardList } from "lucide-react";
 
@@ -27,9 +28,11 @@ export default function PermitsPage() {
   const hasHydrated = useStore((s) => s._hasHydrated);
 
   const [permits, setPermits] = useState<PermitSummary[]>([]);
+  const [users, setUsers] = useState<SessionUser[]>([]);
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<PermitType>("CMW");
   const [title, setTitle] = useState("");
+  const [holderId, setHolderId] = useState("");
   const [creating, setCreating] = useState(false);
   const loadedRef = useRef(false);
 
@@ -37,6 +40,12 @@ export default function PermitsPage() {
     const res = await fetch("/api/permits?list=true");
     const data = await res.json();
     setPermits(data);
+  }
+
+  async function loadUsers() {
+    const res = await fetch("/api/users");
+    const data = await res.json();
+    setUsers(data.filter((u: SessionUser) => u.role === "spark_user"));
   }
 
   useEffect(() => {
@@ -52,36 +61,38 @@ export default function PermitsPage() {
     if (!loadedRef.current) {
       loadedRef.current = true;
       loadPermits();
+      loadUsers();
     }
   }, [currentUser, router, hasHydrated]);
 
   if (!currentUser || currentUser.role === "worker") return null;
 
   async function handleCreate() {
-    if (!title.trim() || !currentUser) return;
+    if (!title.trim() || !currentUser || !holderId) return;
     setCreating(true);
     await fetch("/api/permits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, title: title.trim(), holderId: currentUser.id }),
+      body: JSON.stringify({ type, title: title.trim(), holderId, issuerId: currentUser.id }),
     });
     setCreating(false);
     setTitle("");
+    setHolderId("");
     setOpen(false);
     loadPermits();
   }
 
   const myPermits = permits.filter(
-    (p) => currentUser.role === "worker" || p.permitHolderId === currentUser.id
+    (p) => currentUser.role === "worker" || p.permitHolderId === currentUser.id || (p as PermitSummary & { permitIssuerId?: string }).permitIssuerId === currentUser.id
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="page-shell">
       <Header />
-      <div className="px-4 py-6 max-w-lg mx-auto">
+      <div className="page-content">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-bold text-spark-navy">Permits</h1>
-          {currentUser.role === "permit_holder" && (
+          {currentUser.role === "spark_user" && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger render={<Button className="bg-spark-purple hover:bg-spark-purple/90 text-white gap-1.5" />}>
                 <Plus className="w-4 h-4" />
@@ -121,9 +132,26 @@ export default function PermitsPage() {
                       className="mt-1.5"
                     />
                   </div>
+                  <div>
+                    <Label>Permit Holder</Label>
+                    <div className="mt-1.5">
+                      <Select value={holderId} onValueChange={(val) => setHolderId(val || "")}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Permit Holder" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                   <Button
                     onClick={handleCreate}
-                    disabled={!title.trim() || creating}
+                    disabled={!title.trim() || !holderId || creating}
                     className="w-full bg-spark-purple hover:bg-spark-purple/90 text-white"
                   >
                     {creating ? "Creating..." : "Create Permit"}
@@ -138,7 +166,7 @@ export default function PermitsPage() {
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <ClipboardList className="w-12 h-12 text-spark-gray mb-3" />
             <p className="text-spark-gray">No permits yet</p>
-            {currentUser.role === "permit_holder" && (
+            {currentUser.role === "spark_user" && (
               <p className="text-spark-gray text-sm mt-1">Tap &ldquo;New&rdquo; to create one</p>
             )}
           </div>

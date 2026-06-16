@@ -14,7 +14,7 @@ export default function LoginPage() {
   const currentUser = useStore((s) => s.currentUser);
   const hasHydrated = useStore((s) => s._hasHydrated);
 
-  const [role, setRole] = useState<"permit_holder" | "worker">("permit_holder");
+  const [role, setRole] = useState<"spark_user" | "worker">("spark_user");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [users, setUsers] = useState<SessionUser[]>([]);
@@ -114,10 +114,10 @@ export default function LoginPage() {
         <div className="bg-white rounded-xl p-6 shadow-lg">
           <div className="flex rounded-lg bg-gray-100 p-1 mb-6">
             <button
-              onClick={() => { setRole("permit_holder"); setName(""); setError(""); }}
-              className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${role === "permit_holder" ? "bg-spark-blue text-white shadow-sm" : "text-gray-600"}`}
+              onClick={() => { setRole("spark_user"); setName(""); setError(""); }}
+              className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${role === "spark_user" ? "bg-spark-blue text-white shadow-sm" : "text-gray-600"}`}
             >
-              Permit Holder
+              Spark User
             </button>
             <button
               onClick={() => { setRole("worker"); setName(""); setError(""); }}
@@ -129,13 +129,13 @@ export default function LoginPage() {
 
           <div className="space-y-4">
             <div>
-              <Label htmlFor="name">{role === "permit_holder" ? "Username" : "Worker ID"}</Label>
+              <Label htmlFor="name">{role === "spark_user" ? "Username" : "Worker ID"}</Label>
               <Input
                 id="name"
                 type="text"
                 inputMode={role === "worker" ? "numeric" : undefined}
                 pattern={role === "worker" ? "[0-9]*" : undefined}
-                placeholder={role === "permit_holder" ? "Enter your name" : "Enter 6-digit ID"}
+                placeholder={role === "spark_user" ? "Enter your name" : "Enter 6-digit ID"}
                 maxLength={role === "worker" ? 6 : 50}
                 value={name}
                 onChange={(e) => setName(e.target.value)}

@@ -94,8 +94,65 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Subtle warm-gray page background so the content card pops */
+    background-color: #f0f2f5;
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* ─── Centered page shell ────────────────────────────────────────────── */
+@layer utilities {
+  /*
+   * .page-content
+   * Drop this on the inner content <div> of every page in place of the
+   * current `px-4 py-6 max-w-lg mx-auto` pattern.
+   *
+   * What it does:
+   *   • Centers the column and caps it at 680px (comfortable reading width)
+   *   • Gives it a white card background with shadow and rounded corners
+   *   • Collapses side padding to 16px on mobile so nothing clips
+   */
+  .page-content {
+    width: 100%;
+    max-width: 680px;
+    margin-inline: auto;          /* horizontal centering */
+    padding: 1.5rem 1.5rem 2rem;  /* 24px sides on ≥ sm */
+    background-color: #ffffff;
+    border-radius: 1rem;
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.06),
+      0 4px 16px rgba(0, 0, 0, 0.08);
+  }
+
+  /* On small phones shrink side padding to 16px and drop the rounded top
+     corners so it feels flush with the header */
+  @media (max-width: 640px) {
+    .page-content {
+      padding-inline: 1rem;         /* 16px */
+      border-radius: 0 0 1rem 1rem;
+      box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.05),
+        0 4px 12px rgba(0, 0, 0, 0.07);
+    }
+  }
+
+  /*
+   * .page-shell
+   * Outer wrapper that replaces `min-h-screen bg-gray-50`.
+   * Provides the colored background and top padding so the content card
+   * doesn't butt up against the sticky header.
+   */
+  .page-shell {
+    min-height: 100dvh;
+    background-color: #f0f2f5;
+    padding-block: 1.5rem;    /* 24px top/bottom breathing room */
+  }
+
+  @media (max-width: 640px) {
+    .page-shell {
+      padding-block: 0.75rem; /* tighter on mobile */
+    }
   }
 }

@@ -76,7 +76,7 @@ export default function PermitDetailPage({
   if (!currentUser || currentUser.role === "worker") return null;
   if (!permit) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="page-shell">
         <Header />
         <div className="flex items-center justify-center py-20">
           <p className="text-spark-gray">Loading...</p>
@@ -87,13 +87,16 @@ export default function PermitDetailPage({
 
   const readOnly = permit.status === "closed";
   const isHolder =
-    currentUser.role === "permit_holder" &&
+    currentUser.role === "spark_user" &&
     permit.permitHolderId === currentUser.id;
+  const isIssuer =
+    currentUser.role === "spark_user" &&
+    permit.permitIssuerId === currentUser.id;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="page-shell">
       <Header />
-      <div className="px-4 py-6 max-w-lg mx-auto space-y-4">
+      <div className="page-content space-y-4">
         <button
           onClick={() => router.push("/permits")}
           className="flex items-center gap-1 text-spark-blue text-sm font-medium mb-2"
@@ -117,6 +120,7 @@ export default function PermitDetailPage({
           </div>
           <h1 className="text-lg font-bold text-spark-navy">{permit.title}</h1>
           <p className="text-sm text-spark-gray mt-0.5">Permit Holder: {permit.permitHolder.name}</p>
+          <p className="text-sm text-spark-gray mt-0.5">Permit Issuer: {permit.permitIssuer?.name}</p>
           <p className="text-xs text-spark-gray">
             {PERMIT_TYPE_LABELS[permit.type as keyof typeof PERMIT_TYPE_LABELS] ?? permit.type}
           </p>
@@ -125,10 +129,10 @@ export default function PermitDetailPage({
         <Separator />
 
         <IsolationSection permit={permit} isHolder={isHolder} readOnly={readOnly} onRefresh={loadPermit} />
-        <ShiftSection permit={permit} isHolder={isHolder} readOnly={readOnly} onRefresh={loadPermit} />
+        <ShiftSection permit={permit} isHolder={isHolder} isIssuer={isIssuer} readOnly={readOnly} onRefresh={loadPermit} />
         <ShiftHistorySection permit={permit} />
         {permit.shifts.length > 0 && <PermitQRSection permitId={permit.id} />}
-        <ClosureSection permit={permit} isHolder={isHolder} readOnly={readOnly} onRefresh={loadPermit} />
+        <ClosureSection permit={permit} isHolder={isHolder} isIssuer={isIssuer} readOnly={readOnly} onRefresh={loadPermit} />
         <QRDisplay />
       </div>
     </div>
@@ -136,6 +140,11 @@ export default function PermitDetailPage({
 }
 
 // --- Isolation Task Section (CMW only) ---
+
+function formatDateTime(ts: string | null): string {
+  if (!ts) return "";
+  return new Date(ts).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+}
 
 function IsolationSection({
   permit,
@@ -167,7 +176,31 @@ function IsolationSection({
     permit.shiftIsolationConfirmations?.filter((c) => c.cycleNumber === currentCycle) ?? [];
   const allCycleConfirmed =
     pendingConfirmations.length > 0 &&
-    pendingConfirmations.every((c) => c.signedBy !== null);
+    pendingConfirmations.every((c) => c.isolatedById !== null && c.verifiedById !== null);
+
+  // After a shift closes, isolation signatures must be re-collected before next revalidation.
+  // "collecting" = confirmations exist for current cycle (started). "not started" = no confirmations yet.
+  const isReconfirmationPhase = closedShiftCount > 0 && permit.status !== "closed";
+  const reconfirmationStarted = pendingConfirmations.length > 0;
+
+  async function handleStartCollectSignatures() {
+    // Creates ShiftIsolationConfirmation rows for the current cycle by triggering
+    // the same mechanism — we do a PUT to a new action on isolation-tasks endpoint.
+    setConfirming(true);
+    setError("");
+    const res = await fetch(`/api/permits/${permit.id}/isolation-tasks`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "start_collect_signatures", cycleNumber: currentCycle }),
+    });
+    setConfirming(false);
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error || "Failed to start signature collection");
+      return;
+    }
+    onRefresh();
+  }
 
   async function handleAddTask() {
     if (!taskName.trim()) return;
@@ -273,138 +306,184 @@ function IsolationSection({
           <p className="text-spark-gray text-sm text-center py-4">No isolation tasks yet</p>
         )}
 
-        {/* Initial isolation tasks with original point signatures */}
-        {permit.isolationTasks.map((task) => {
-          const allSigned = task.isolationPoints.every((pt) => pt.signedBy !== null);
-          return (
-            <div key={task.id} className="border rounded-lg p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-medium text-sm text-spark-navy">{task.name}</span>
-                <div className="flex items-center gap-2">
-                  {allSigned ? (
-                    <Badge className="bg-green-100 text-green-800">
-                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                      Signed
-                    </Badge>
-                  ) : isHolder && !readOnly && permit.status === "isolation_pending" ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1 text-xs"
-                      onClick={() => {
-                        const data: QRCodeData = { permitId: permit.id, action: "task_signature", targetId: task.id };
-                        setActiveQR(data);
-                      }}
-                    >
-                      <QrCode className="w-3 h-3" />
-                      Show QR
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                {task.isolationPoints.map((pt) => (
-                  <div key={pt.id} className="flex items-center justify-between text-sm py-1.5 px-2 rounded bg-gray-50">
-                    <div className="flex items-center gap-2">
-                      {pt.signedBy ? (
-                        <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <Circle className="w-4 h-4 text-gray-400" />
-                      )}
-                      <span>{pt.name}</span>
-                    </div>
-                    {pt.signedBy && (
-                      <span className="text-xs text-spark-gray">
-                        Signed by {pt.signer?.name ?? pt.signedBy}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Confirm Tasks button — draft only, after at least one task exists */}
-        {isHolder && !readOnly && isDraft && permit.isolationTasks.length > 0 && (
-          <div className="pt-1">
-            {error && !showForm && <p className="text-red-500 text-sm mb-2">{error}</p>}
-            <p className="text-xs text-spark-gray mb-2">
-              Add all tasks, then confirm to proceed to isolation signing.
-            </p>
-            <Button
-              onClick={handleConfirmTasks}
-              disabled={confirming}
-              className="w-full bg-spark-blue hover:bg-spark-blue/90 text-white gap-2"
-            >
-              <ClipboardCheck className="w-4 h-4" />
-              {confirming ? "Confirming..." : "Confirm Tasks"}
-            </Button>
-          </div>
-        )}
-
-        {/* Per-shift re-confirmation panel — shown after each relinquishment */}
-        {closedShiftCount > 0 && pendingConfirmations.length > 0 && (
-          <div className="mt-2 border-t pt-3">
-            <p className="text-sm font-medium text-spark-navy mb-2 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-orange-500" />
-              Re-confirmation Required (Cycle {currentCycle})
-            </p>
-            {allCycleConfirmed ? (
-              <p className="text-xs text-green-700 bg-green-50 rounded px-2 py-1">
-                All tasks re-confirmed — holder can start next revalidation.
-              </p>
-            ) : (
-              <p className="text-xs text-orange-700 bg-orange-50 rounded px-2 py-1 mb-2">
-                Workers must re-confirm all isolation tasks before next revalidation.
-              </p>
-            )}
-            <div className="space-y-2 mt-2">
-              {permit.isolationTasks.map((task) => {
-                const confirmation = pendingConfirmations.find(
-                  (c) => c.isolationTaskId === task.id
-                );
-                const confirmed = confirmation?.signedBy != null;
-                return (
-                  <div key={task.id} className="border rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm text-spark-navy">{task.name}</span>
-                      <div className="flex items-center gap-2">
-                        {confirmed ? (
-                          <Badge className="bg-green-100 text-green-800">
-                            <CheckCircle2 className="w-3 h-3 mr-1" />
-                            Confirmed
-                          </Badge>
-                        ) : isHolder && !readOnly ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1 text-xs"
-                            onClick={() => {
-                              const data: QRCodeData = {
-                                permitId: permit.id,
-                                action: "shift_isolation_confirmation",
-                                targetId: JSON.stringify({ taskId: task.id, cycleNumber: currentCycle }),
-                              };
-                              setActiveQR(data);
-                            }}
-                          >
-                            <QrCode className="w-3 h-3" />
-                            Show QR
-                          </Button>
-                        ) : null}
+        {/* Reconfirmation phase: after a shift is relinquished, signatures are cleared */}
+        {isReconfirmationPhase ? (
+          <>
+            {!reconfirmationStarted ? (
+              /* Not started yet — show tasks as unsigned, prompt to collect signatures */
+              <>
+                <div className="space-y-2">
+                  {permit.isolationTasks.map((task) => (
+                    <div key={task.id} className="border rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-sm text-spark-navy">{task.name}</span>
+                        <Badge variant="outline" className="bg-orange-50 text-orange-700">
+                          <Circle className="w-3 h-3 mr-1" />
+                          Pending
+                        </Badge>
+                      </div>
+                      <div className="space-y-1.5">
+                        {task.isolationPoints.map((pt) => (
+                          <div key={pt.id} className="flex items-center gap-2 text-sm py-1.5 px-2 rounded bg-gray-50">
+                            <Circle className="w-4 h-4 text-gray-400" />
+                            <span>{pt.name}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    {confirmed && confirmation && (
-                      <p className="text-xs text-spark-gray mt-1">
-                        Confirmed by {confirmation.signer?.name ?? confirmation.signedBy}
-                      </p>
-                    )}
+                  ))}
+                </div>
+                {isHolder && !readOnly && (
+                  <div className="pt-1">
+                    {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+                    <p className="text-xs text-spark-gray mb-2">
+                      Shift relinquished. Collect isolation task signatures before next revalidation.
+                    </p>
+                    <Button
+                      onClick={handleStartCollectSignatures}
+                      disabled={confirming}
+                      className="w-full bg-spark-blue hover:bg-spark-blue/90 text-white gap-2"
+                    >
+                      <ClipboardCheck className="w-4 h-4" />
+                      {confirming ? "Starting..." : "Start collect signatures"}
+                    </Button>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                )}
+              </>
+            ) : (
+              /* Reconfirmation in progress — show per-task confirmation status */
+              <>
+                {allCycleConfirmed ? (
+                  <p className="text-xs text-green-700 bg-green-50 rounded px-2 py-1">
+                    All tasks confirmed — holder can start next revalidation.
+                  </p>
+                ) : (
+                  <p className="text-xs text-orange-700 bg-orange-50 rounded px-2 py-1">
+                    Workers must confirm all isolation tasks before next revalidation.
+                  </p>
+                )}
+                <div className="space-y-2">
+                  {permit.isolationTasks.map((task) => {
+                    const confirmation = pendingConfirmations.find((c) => c.isolationTaskId === task.id);
+                    const confirmed = confirmation?.isolatedById != null && confirmation?.verifiedById != null;
+                    return (
+                      <div key={task.id} className="border rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-sm text-spark-navy">{task.name}</span>
+                          <div className="flex items-center gap-2">
+                            {confirmed ? (
+                              <Badge className="bg-green-100 text-green-800">
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                Confirmed
+                              </Badge>
+                            ) : isHolder && !readOnly ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1 text-xs"
+                                onClick={() => {
+                                  const data: QRCodeData = {
+                                    permitId: permit.id,
+                                    action: "shift_isolation_confirmation",
+                                    targetId: JSON.stringify({ taskId: task.id, cycleNumber: currentCycle }),
+                                  };
+                                  setActiveQR(data);
+                                }}
+                              >
+                                <QrCode className="w-3 h-3" />
+                                Show QR
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                        {confirmation && (confirmation.isolatedById || confirmation.verifiedById) && (
+                          <div className="text-xs text-spark-gray mt-1 space-y-1">
+                            {confirmation.isolatedById && (
+                              <p>Isolated by {confirmation.isolatedBy?.name ?? confirmation.isolatedById}{confirmation.isolatedAt ? ` · ${formatDateTime(confirmation.isolatedAt)}` : ""}</p>
+                            )}
+                            {confirmation.verifiedById && (
+                              <p>Verified by {confirmation.verifiedBy?.name ?? confirmation.verifiedById}{confirmation.verifiedAt ? ` · ${formatDateTime(confirmation.verifiedAt)}` : ""}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          /* Initial phase — show original isolation point signatures */
+          <>
+            {permit.isolationTasks.map((task) => {
+              const allSigned = task.isolatedById !== null && task.verifiedById !== null;
+              return (
+                <div key={task.id} className="border rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-sm text-spark-navy">{task.name}</span>
+                    <div className="flex items-center gap-2">
+                      {allSigned ? (
+                        <Badge className="bg-green-100 text-green-800">
+                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          Signed
+                        </Badge>
+                      ) : isHolder && !readOnly && permit.status === "isolation_pending" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1 text-xs"
+                          onClick={() => {
+                            const data: QRCodeData = { permitId: permit.id, action: "task_signature", targetId: task.id };
+                            setActiveQR(data);
+                          }}
+                        >
+                          <QrCode className="w-3 h-3" />
+                          Show QR
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {task.isolationPoints.map((pt) => (
+                      <div key={pt.id} className="flex items-center gap-2 text-sm py-1.5 px-2 rounded bg-gray-50">
+                        <Circle className="w-4 h-4 text-gray-400" />
+                        <span>{pt.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {(task.isolatedById || task.verifiedById) && (
+                    <div className="text-xs text-spark-gray mt-2 space-y-1 border-t pt-2">
+                      {task.isolatedById && (
+                        <p>Isolated by {task.isolatedBy?.name ?? task.isolatedById}{task.isolatedAt ? ` · ${formatDateTime(task.isolatedAt)}` : ""}</p>
+                      )}
+                      {task.verifiedById && (
+                        <p>Verified by {task.verifiedBy?.name ?? task.verifiedById}{task.verifiedAt ? ` · ${formatDateTime(task.verifiedAt)}` : ""}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Confirm Tasks button — draft only, after at least one task exists */}
+            {isHolder && !readOnly && isDraft && permit.isolationTasks.length > 0 && (
+              <div className="pt-1">
+                {error && !showForm && <p className="text-red-500 text-sm mb-2">{error}</p>}
+                <p className="text-xs text-spark-gray mb-2">
+                  Add all tasks, then confirm to proceed to isolation signing.
+                </p>
+                <Button
+                  onClick={handleConfirmTasks}
+                  disabled={confirming}
+                  className="w-full bg-spark-blue hover:bg-spark-blue/90 text-white gap-2"
+                >
+                  <ClipboardCheck className="w-4 h-4" />
+                  {confirming ? "Confirming..." : "Confirm Tasks"}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
@@ -416,11 +495,13 @@ function IsolationSection({
 function ShiftSection({
   permit,
   isHolder,
+  isIssuer,
   readOnly,
   onRefresh,
 }: {
   permit: PermitData;
   isHolder: boolean;
+  isIssuer: boolean;
   readOnly: boolean;
   onRefresh: () => void;
 }) {
@@ -444,18 +525,18 @@ function ShiftSection({
     return shift.workers.filter((w) => w.userId === userId);
   }
 
-  async function handleStartRevalidation() {
+  async function handleIssuerSignOn() {
     setLoading(true);
     setActionError("");
     const res = await fetch(`/api/permits/${permit.id}/shifts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "start_revalidation" }),
+      body: JSON.stringify({ action: "issuer_sign_on" }),
     });
     setLoading(false);
     if (!res.ok) {
       const data = await res.json();
-      setActionError(data.error || "Failed to start revalidation");
+      setActionError(data.error || "Failed to sign on");
     } else {
       onRefresh();
     }
@@ -479,6 +560,24 @@ function ShiftSection({
     }
   }
 
+  async function handleIssuerSignOff() {
+    if (!currentShift) return;
+    setLoading(true);
+    setRelinquishError("");
+    const res = await fetch(`/api/permits/${permit.id}/shifts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "issuer_sign_off", shiftId: currentShift.id }),
+    });
+    setLoading(false);
+    if (!res.ok) {
+      const data = await res.json();
+      setRelinquishError(data.error || "Failed to sign off");
+    } else {
+      onRefresh();
+    }
+  }
+
   async function handleHolderSignOff() {
     if (!currentShift) return;
     setLoading(true);
@@ -497,39 +596,42 @@ function ShiftSection({
     }
   }
 
-  // No shifts yet - show start revalidation button
-  if (!currentShift) {
-    if (isHolder && !readOnly) {
+  // No open shift — show Sign On button
+  if (!currentShift || currentShift.status === "closed") {
+    if ((isHolder || isIssuer) && !readOnly) {
       const closedShiftCount = permit.shifts.filter((s) => s.status === "closed").length;
       let canStart: boolean;
       if (permit.type !== "CMW") {
         canStart = true;
       } else if (closedShiftCount === 0) {
-        // First revalidation: all original isolation points must be signed
         canStart =
           permit.isolationTasks.length > 0 &&
-          permit.isolationTasks.every((t) => t.isolationPoints.every((pt) => pt.signedBy !== null));
+          permit.isolationTasks.every((t) => t.isolatedById !== null && t.verifiedById !== null);
       } else {
-        // Subsequent revalidations: per-shift confirmations for current cycle must be signed
         const cycleConfirmations = permit.shiftIsolationConfirmations?.filter(
           (c) => c.cycleNumber === closedShiftCount
         ) ?? [];
         canStart =
           cycleConfirmations.length > 0 &&
-          cycleConfirmations.every((c) => c.signedBy !== null);
+          cycleConfirmations.every((c) => c.isolatedById !== null && c.verifiedById !== null);
       }
       return (
         <Card>
           <CardContent className="py-6 text-center">
             {actionError && <p className="text-red-500 text-sm mb-2">{actionError}</p>}
-            <Button
-              onClick={handleStartRevalidation}
-              disabled={!canStart || loading}
-              className="bg-spark-blue hover:bg-spark-blue/90 text-white gap-1.5"
-            >
-              <LogIn className="w-4 h-4" />
-              {loading ? "Starting..." : "Start Daily Revalidation"}
-            </Button>
+            {isIssuer && (
+              <Button
+                onClick={handleIssuerSignOn}
+                disabled={!canStart || loading}
+                className="bg-spark-purple hover:bg-spark-purple/90 text-white gap-1.5"
+              >
+                <LogIn className="w-4 h-4" />
+                {loading ? "Signing On..." : "Issuer Sign On"}
+              </Button>
+            )}
+            {!isIssuer && isHolder && (
+              <p className="text-sm text-spark-gray">Waiting for Permit Issuer to sign on...</p>
+            )}
             {!canStart && (
               <p className="text-xs text-spark-gray mt-2">Complete all isolation tasks first</p>
             )}
@@ -540,45 +642,27 @@ function ShiftSection({
     return null;
   }
 
-  // Last shift is closed - show start revalidation button for next shift
-  if (currentShift.status === "closed") {
-    if (isHolder && !readOnly) {
-      const closedShiftCount = permit.shifts.filter((s) => s.status === "closed").length;
-      let canStart: boolean;
-      if (permit.type !== "CMW") {
-        canStart = true;
-      } else if (closedShiftCount === 0) {
-        canStart =
-          permit.isolationTasks.length > 0 &&
-          permit.isolationTasks.every((t) => t.isolationPoints.every((pt) => pt.signedBy !== null));
-      } else {
-        const cycleConfirmations = permit.shiftIsolationConfirmations?.filter(
-          (c) => c.cycleNumber === closedShiftCount
-        ) ?? [];
-        canStart =
-          cycleConfirmations.length > 0 &&
-          cycleConfirmations.every((c) => c.signedBy !== null);
-      }
-      return (
-        <Card>
-          <CardContent className="py-6 text-center">
-            {actionError && <p className="text-red-500 text-sm mb-2">{actionError}</p>}
+  // Shift is pending holder sign on (revalidation_pending)
+  if (currentShift.status === "revalidation_pending") {
+    return (
+      <Card>
+        <CardContent className="py-6 text-center">
+          {actionError && <p className="text-red-500 text-sm mb-2">{actionError}</p>}
+          {isHolder ? (
             <Button
-              onClick={handleStartRevalidation}
-              disabled={!canStart || loading}
+              onClick={handleHolderSignOn}
+              disabled={loading}
               className="bg-spark-blue hover:bg-spark-blue/90 text-white gap-1.5"
             >
               <LogIn className="w-4 h-4" />
-              {loading ? "Starting..." : "Start Daily Revalidation"}
+              {loading ? "Signing On..." : "Holder Sign On (Daily Revalidation)"}
             </Button>
-            {!canStart && (
-              <p className="text-xs text-spark-gray mt-2">Complete all isolation tasks first</p>
-            )}
-          </CardContent>
-        </Card>
-      );
-    }
-    return null;
+          ) : isIssuer ? (
+            <p className="text-sm text-spark-gray">Waiting for Permit Holder to sign on...</p>
+          ) : null}
+        </CardContent>
+      </Card>
+    );
   }
 
   const latestWorkers = getLatestWorkers(currentShift);
@@ -589,40 +673,13 @@ function ShiftSection({
         <CardTitle className="text-base flex items-center gap-2">
           <LogIn className="w-4 h-4 text-spark-blue" />
           Current Shift
-          <Badge
-            variant="outline"
-            className={
-              currentShift.status === "open"
-                ? "bg-green-100 text-green-800"
-                : currentShift.status === "revalidation_pending"
-                ? "bg-yellow-100 text-yellow-800"
-                : "bg-gray-100 text-gray-700"
-            }
-          >
-            {currentShift.status === "revalidation_pending"
-              ? "Awaiting Holder Sign-On"
-              : currentShift.status === "open"
-              ? "Open"
-              : "Closed"}
+          <Badge variant="outline" className="bg-green-100 text-green-800">
+            Open
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {currentShift.status === "revalidation_pending" && isHolder && !readOnly && (
-          <div>
-            {actionError && <p className="text-red-500 text-sm mb-2">{actionError}</p>}
-            <Button
-              onClick={handleHolderSignOn}
-              disabled={loading}
-              className="w-full bg-spark-blue hover:bg-spark-blue/90 text-white gap-1.5"
-            >
-              <LogIn className="w-4 h-4" />
-              {loading ? "Signing On..." : "Sign On (Daily Revalidation)"}
-            </Button>
-          </div>
-        )}
-
-        {currentShift.status === "open" && isHolder && !readOnly && (
+        {isHolder && !readOnly && (
           <Button
             onClick={() => {
               const data: QRCodeData = { permitId: permit.id, action: "shift", targetId: currentShift.id };
@@ -690,18 +747,39 @@ function ShiftSection({
           </div>
         )}
 
-        {currentShift.status === "open" && isHolder && !readOnly && (
+        {currentShift.status === "open" && !readOnly && (
           <div className="pt-2">
             {relinquishError && <p className="text-red-500 text-sm mb-2">{relinquishError}</p>}
-            <Button
-              variant="outline"
-              className="w-full gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50"
-              onClick={handleHolderSignOff}
-              disabled={loading}
-            >
-              <LogOut className="w-4 h-4" />
-              {loading ? "Signing Off..." : "Sign Off (Daily Relinquishment)"}
-            </Button>
+
+            {!currentShift.permitIssuerSignedOff ? (
+              isIssuer ? (
+                <Button
+                  variant="outline"
+                  className="w-full gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50"
+                  onClick={handleIssuerSignOff}
+                  disabled={loading}
+                >
+                  <LogOut className="w-4 h-4" />
+                  {loading ? "Signing Off..." : "Issuer Sign Off"}
+                </Button>
+              ) : isHolder ? (
+                <p className="text-sm text-spark-gray text-center">Waiting for Permit Issuer to sign off...</p>
+              ) : null
+            ) : (
+              isHolder ? (
+                <Button
+                  variant="outline"
+                  className="w-full gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50"
+                  onClick={handleHolderSignOff}
+                  disabled={loading}
+                >
+                  <LogOut className="w-4 h-4" />
+                  {loading ? "Signing Off..." : "Holder Sign Off (Daily Relinquishment)"}
+                </Button>
+              ) : isIssuer ? (
+                <p className="text-sm text-spark-gray text-center">Waiting for Permit Holder to sign off...</p>
+              ) : null
+            )}
           </div>
         )}
       </CardContent>
@@ -771,6 +849,7 @@ function ClosureSection({
 }: {
   permit: PermitData;
   isHolder: boolean;
+  isIssuer: boolean;
   readOnly: boolean;
   onRefresh: () => void;
 }) {

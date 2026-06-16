@@ -57,44 +57,42 @@ export default function ScanTaskPage({
   }
 
   // Initial isolation point signing (isolation_pending)
-  async function handleSignTask(taskId: string) {
+  async function handleSignTask(taskId: string, type: "isolate" | "verify") {
     if (!currentUser) return;
     setError("");
     const res = await fetch(`/api/permits/${permitId}/isolation-tasks`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId, workerId: currentUser.id }),
+      body: JSON.stringify({ taskId, workerId: currentUser.id, type }),
     });
     if (res.ok) {
-      setSignedTaskId(taskId);
       loadPermit();
     } else {
       const data = await res.json();
-      setError(data.error || "Failed to sign task");
+      setError(data.error || `Failed to sign as ${type}`);
     }
   }
 
   // Per-shift re-confirmation signing (shift_closed)
-  async function handleReconfirmTask(taskId: string, cycleNumber: number) {
+  async function handleReconfirmTask(taskId: string, cycleNumber: number, type: "isolate" | "verify") {
     if (!currentUser) return;
     setError("");
     const res = await fetch(`/api/permits/${permitId}/shift-isolation`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId, cycleNumber, workerId: currentUser.id }),
+      body: JSON.stringify({ taskId, cycleNumber, workerId: currentUser.id, type }),
     });
     if (res.ok) {
-      setSignedTaskId(taskId);
       loadPermit();
     } else {
       const data = await res.json();
-      setError(data.error || "Failed to confirm task");
+      setError(data.error || `Failed to reconfirm as ${type}`);
     }
   }
 
   if (!permit) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="page-shell">
         <Header />
         <div className="flex items-center justify-center py-20">
           <p className="text-spark-gray">Loading...</p>
@@ -111,11 +109,13 @@ export default function ScanTaskPage({
   const cycleConfirmations = permit.shiftIsolationConfirmations?.filter(
     (c) => c.cycleNumber === currentCycle
   ) ?? [];
-  const pendingCycleConfirmations = cycleConfirmations.filter((c) => c.signedBy === null);
+  const pendingCycleConfirmations = cycleConfirmations.filter(
+    (c) => c.isolatedById === null || c.verifiedById === null
+  );
 
   // Initial unsigned tasks (for isolation_pending mode)
   const unsignedTasks = permit.isolationTasks.filter((t) =>
-    t.isolationPoints.some((pt) => pt.signedBy === null)
+    t.isolatedById === null || t.verifiedById === null
   );
 
   const pageTitle = isReconfirm ? "Re-confirm Isolation" : "Sign Isolation Tasks";
@@ -125,9 +125,9 @@ export default function ScanTaskPage({
   if (isReconfirm) {
     const allReconfirmed = pendingCycleConfirmations.length === 0 && cycleConfirmations.length > 0;
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="page-shell">
         <Header />
-        <div className="px-4 py-6 max-w-lg mx-auto">
+        <div className="page-content">
           <button
             onClick={() => router.push("/scan")}
             className="flex items-center gap-1 text-spark-blue text-sm font-medium mb-2"
@@ -163,8 +163,9 @@ export default function ScanTaskPage({
             <div className="space-y-4">
               {permit.isolationTasks.map((task) => {
                 const confirmation = cycleConfirmations.find((c) => c.isolationTaskId === task.id);
-                const confirmed = confirmation?.signedBy != null;
-                const wasJustSigned = signedTaskId === task.id;
+                const isIsolated = confirmation?.isolatedById != null;
+                const isVerified = confirmation?.verifiedById != null;
+                const confirmed = isIsolated && isVerified;
                 return (
                   <Card key={task.id}>
                     <CardHeader className="pb-2">
@@ -181,22 +182,30 @@ export default function ScanTaskPage({
                         )}
                       </div>
                     </CardHeader>
-                    <CardContent>
-                      {confirmed ? (
-                        <p className="text-xs text-spark-gray">
-                          Confirmed by {confirmation?.signer?.name ?? confirmation?.signedBy}
-                        </p>
-                      ) : wasJustSigned ? (
-                        <p className="text-xs text-green-700">Just confirmed ✓</p>
-                      ) : (
-                        <Button
-                          onClick={() => handleReconfirmTask(task.id, currentCycle)}
-                          className="w-full mt-2 bg-spark-blue hover:bg-spark-blue/90 text-white gap-2"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          Confirm Task
-                        </Button>
-                      )}
+                    <CardContent className="space-y-3">
+                      {/* Isolated By */}
+                      <div className="flex flex-col gap-1 pb-2 border-b">
+                        <p className="text-xs font-semibold text-spark-navy">ISOLATED BY (Auth. Person) Electrical</p>
+                        {isIsolated ? (
+                          <p className="text-xs text-spark-gray">Confirmed by {confirmation?.isolatedBy?.name ?? confirmation?.isolatedById}</p>
+                        ) : (
+                          <Button size="sm" onClick={() => handleReconfirmTask(task.id, currentCycle, "isolate")} className="w-full bg-spark-blue hover:bg-spark-blue/90 text-white gap-2">
+                            <CheckCircle2 className="w-4 h-4" /> Confirm as Isolated By
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Verified By */}
+                      <div className="flex flex-col gap-1 pt-1">
+                        <p className="text-xs font-semibold text-spark-navy">VERIFIED BY (Auth. Person) Electrical</p>
+                        {isVerified ? (
+                          <p className="text-xs text-spark-gray">Confirmed by {confirmation?.verifiedBy?.name ?? confirmation?.verifiedById}</p>
+                        ) : (
+                          <Button size="sm" onClick={() => handleReconfirmTask(task.id, currentCycle, "verify")} className="w-full bg-spark-purple hover:bg-spark-purple/90 text-white gap-2">
+                            <CheckCircle2 className="w-4 h-4" /> Confirm as Verified By
+                          </Button>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 );
@@ -210,9 +219,9 @@ export default function ScanTaskPage({
 
   // --- Initial signing mode (isolation_pending) ---
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="page-shell">
       <Header />
-      <div className="px-4 py-6 max-w-lg mx-auto">
+      <div className="page-content">
         <button
           onClick={() => router.push("/scan")}
           className="flex items-center gap-1 text-spark-blue text-sm font-medium mb-2"
@@ -252,8 +261,9 @@ export default function ScanTaskPage({
         ) : (
           <div className="space-y-4">
             {permit.isolationTasks.map((task) => {
-              const allSigned = task.isolationPoints.every((pt) => pt.signedBy !== null);
-              const wasJustSigned = signedTaskId === task.id;
+              const isIsolated = task.isolatedById !== null;
+              const isVerified = task.verifiedById !== null;
+              const allSigned = isIsolated && isVerified;
 
               return (
                 <Card key={task.id}>
@@ -271,29 +281,32 @@ export default function ScanTaskPage({
                       )}
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-2">
-                    {task.isolationPoints.map((pt) => (
-                      <div
-                        key={pt.id}
-                        className="flex items-center justify-between text-sm py-1.5 px-2 rounded bg-gray-50"
-                      >
-                        <div className="flex items-center gap-2">
-                          {pt.signedBy ? (
-                            <CheckCircle2 className="w-4 h-4 text-green-600" />
-                          ) : (
-                            <Circle className="w-4 h-4 text-gray-400" />
-                          )}
-                          <span>{pt.name}</span>
-                        </div>
-                        {pt.signedBy && (
-                          <span className="text-xs text-spark-gray">
-                            Signed by {pt.signer?.name ?? "Worker"}
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                  <CardContent className="space-y-3">
+                    {/* Isolated By */}
+                    <div className="flex flex-col gap-1 pb-2 border-b">
+                      <p className="text-xs font-semibold text-spark-navy">ISOLATED BY (Auth. Person) Electrical</p>
+                      {isIsolated ? (
+                        <p className="text-xs text-spark-gray">Signed by {task.isolatedBy?.name ?? task.isolatedById}</p>
+                      ) : (
+                        <Button size="sm" onClick={() => handleSignTask(task.id, "isolate")} className="w-full bg-spark-blue hover:bg-spark-blue/90 text-white gap-2">
+                          <CheckCircle2 className="w-4 h-4" /> Sign as Isolated By
+                        </Button>
+                      )}
+                    </div>
 
-                    {wasJustSigned && (
+                    {/* Verified By */}
+                    <div className="flex flex-col gap-1 pt-1">
+                      <p className="text-xs font-semibold text-spark-navy">VERIFIED BY (Auth. Person) Electrical</p>
+                      {isVerified ? (
+                        <p className="text-xs text-spark-gray">Signed by {task.verifiedBy?.name ?? task.verifiedById}</p>
+                      ) : (
+                        <Button size="sm" onClick={() => handleSignTask(task.id, "verify")} className="w-full bg-spark-purple hover:bg-spark-purple/90 text-white gap-2">
+                          <CheckCircle2 className="w-4 h-4" /> Sign as Verified By
+                        </Button>
+                      )}
+                    </div>
+
+                    {allSigned && (
                       <div className="pt-2">
                         <Button
                           onClick={() => router.push(`/scan/permit?permitId=${permit.id}`)}
@@ -303,16 +316,6 @@ export default function ScanTaskPage({
                           Go to Permit
                         </Button>
                       </div>
-                    )}
-
-                    {!allSigned && !wasJustSigned && (
-                      <Button
-                        onClick={() => handleSignTask(task.id)}
-                        className="w-full mt-2 bg-spark-blue hover:bg-spark-blue/90 text-white gap-2"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        Sign Off
-                      </Button>
                     )}
                   </CardContent>
                 </Card>

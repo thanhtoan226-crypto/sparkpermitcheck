@@ -8,9 +8,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       where: { id },
       include: {
         permitHolder: true,
-        isolationTasks: { include: { isolationPoints: { include: { signer: true } } } },
+        permitIssuer: true,
+        isolationTasks: { include: { isolatedBy: true, verifiedBy: true, isolationPoints: { include: { signer: true } } } },
         shifts: { include: { workers: { include: { user: true } } }, orderBy: { createdAt: "asc" } },
-        shiftIsolationConfirmations: { include: { signer: true }, orderBy: { cycleNumber: "asc" } },
+        shiftIsolationConfirmations: { include: { isolatedBy: true, verifiedBy: true }, orderBy: { cycleNumber: "asc" } },
       },
     });
     if (!permit) return NextResponse.json({ error: "Not found" }, { status: 404 });

@@ -77,9 +77,9 @@ export default function ScanPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="page-shell">
       <Header />
-      <div className="px-4 py-6 max-w-lg mx-auto">
+      <div className="page-content">
         <h1 className="text-xl font-bold text-spark-navy mb-6">Scan QR Code</h1>
 
         {permits.length === 0 ? (
@@ -99,12 +99,12 @@ export default function ScanPage() {
                 ? Math.max(0, ...permit.shiftIsolationConfirmations.map((c) => c.cycleNumber))
                 : 0;
               const pendingConfirmations = permit.shiftIsolationConfirmations?.filter(
-                (c) => c.cycleNumber === closedShiftCount && c.signedBy === null
+                (c) => c.cycleNumber === closedShiftCount && (c.isolatedById === null || c.verifiedById === null)
               ) ?? [];
               const hasUnsignedInitialTasks =
                 permit.type === "CMW" &&
                 permit.isolationTasks.some((t) =>
-                  t.isolationPoints.some((pt) => pt.signedBy === null)
+                  t.isolatedById === null || t.verifiedById === null
                 );
               const showIsolationButton =
                 (hasUnsignedInitialTasks && permit.status === "isolation_pending") ||
