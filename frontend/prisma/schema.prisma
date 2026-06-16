@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String  @id
+  role        String  // "permit_holder" | "worker"
+  name        String
+  avatarColor String
+  workerId    String? // 6-digit number for workers
+
+  permits                    Permit[]
+  signedPoints               IsolationPoint[]
+  shifts                     ShiftWorker[]
+  shiftIsolationConfirmations ShiftIsolationConfirmation[]
+}
+
+model Permit {
+  id             String   @id
+  type           String   // "CMW" | "CAP_NON_ISOLATION" | "CAP_ISOLATION"
+  title          String
+  status         String   // "draft" | "isolation_pending" | "active" | "shift_open" | "shift_closed" | "closed"
+  permitHolderId String
+  permitHolder   User     @relation(fields: [permitHolderId], references: [id])
+  closedAt       String?
+
+  isolationTasks              IsolationTask[]
+  shifts                      Shift[]
+  shiftIsolationConfirmations ShiftIsolationConfirmation[]
+
+  createdAt String
+}
+
+model IsolationTask {
+  id       String @id
+  name     String
+  permitId String
+  permit   Permit @relation(fields: [permitId], references: [id])
+
+  isolationPoints             IsolationPoint[]
+  shiftIsolationConfirmations ShiftIsolationConfirmation[]
+}
+
+model IsolationPoint {
+  id       String  @id
+  name     String
+  signedBy String?
+  signedAt String?
+  taskId   String
+  task     IsolationTask @relation(fields: [taskId], references: [id])
+
+  signer User? @relation(fields: [signedBy], references: [id])
+}
+
+model Shift {
+  id                    String  @id
+  date                  String
+  status                String  // "revalidation_pending" | "open" | "closed"
+  permitHolderSignedOn  Boolean @default(false)
+  permitHolderSignedOff Boolean @default(false)
+  startedAt             String?
+  endedAt               String?
+  createdAt             String
+  permitId              String
+  permit                Permit  @relation(fields: [permitId], references: [id])
+
+  workers ShiftWorker[]
+}
+
+model ShiftWorker {
+  id          String  @id
+  userId      String
+  user        User    @relation(fields: [userId], references: [id])
+  signedOnAt  String
+  signedOffAt String?
+  shiftId     String
+  shift       Shift   @relation(fields: [shiftId], references: [id])
+}
+
+model ShiftIsolationConfirmation {
+  id              String  @id
+  permitId        String
+  permit          Permit        @relation(fields: [permitId], references: [id])
+  isolationTaskId String
+  isolationTask   IsolationTask @relation(fields: [isolationTaskId], references: [id])
+  cycleNumber     Int     // 1 = after shift 1 closes, 2 = after shift 2 closes, etc.
+  signedBy        String?
+  signedAt        String?
+  signer          User?   @relation(fields: [signedBy], references: [id])
+}
