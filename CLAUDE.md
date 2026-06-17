@@ -18,14 +18,15 @@ Three permit types determine the workflow. The type is a display label on the pe
 
 ### Spark User (Permit Issuer & Permit Holder) Use Cases
 1. **Login**: Log in with a username as a Spark User. System stores the session for quick-switching.
-2. **Create Permit**: Create a new permit by selecting type (CMW, CAP Non-Isolation, CAP Isolation), entering a title, and selecting a Permit Holder. The current user becomes the Permit Issuer.
+2. **Create Permit**: Create a new permit by selecting type (CMW, CAP Non-Isolation, CAP Isolation), entering a title, and selecting a Permit Holder and a Permit Acceptor. The current user becomes the Permit Issuer. All permit holders can view all permits. Permits are ordered by created time descending.
 3. **Create Isolation Task** (CMW only): Create tasks with a name and multiple isolation points. User can generates a QR code for workers to scan and sign off all unsigned tasks.
 4. **Daily Revalidation (Shift Start)**: Permit Issuer signs on first, then Permit Holder signs on to officially begin a new shift. This opens the shift so workers can sign on. A QR code is displayed for workers to scan.
 5. **Monitor Worker Attendance**: View all workers currently signed on or off for the active shift. Each worker shows their latest state with expandable sign-on/off history.
 6. **Daily Relinquishment (Shift Close)**: Close the current shift. All workers must be signed off before the Permit Issuer can sign off. After Permit Issuer signs off, the Permit Holder signs off to relinquish. Once closed, workers can no longer sign on or off.
 7. **Close Permit**: Close the permit with a confirmation prompt (can be done by Holder). All shifts must be closed first. Once closed, the permit becomes read-only but data remains viewable.
-8. **View Permit History**: View past shifts and worker records for any permit, including closed permits.
-9. **View Shift History**: On the permit detail page, a dedicated Shift History card shows all closed shifts with their shift number, date, start time, end time, and worker count. Only closed shifts appear here; the active/current shift is shown separately in the Current Shift section.
+8. **Delete Permit**: Delete a permit. Can be done by the Permit Issuer or Permit Holder if no shifts have been started yet. Once deleted, all associated data is removed.
+9. **View Permit History**: View past shifts and worker records for any permit, including closed permits.
+10. **View Shift History**: On the permit detail page, a dedicated Shift History card shows all closed shifts with their shift number, date, start time, end time, and worker count. Only closed shifts appear here; the active/current shift is shown separately in the Current Shift section.
 
 ### Worker Use Cases
 1. **Login**: Log in with a 6-digit worker ID. System generates a random full name and stores the session.
@@ -54,24 +55,23 @@ Three permit types determine the workflow. The type is a display label on the pe
 
 CMW flow:
 ```
-                        ┌────── Daily Revalidation (Starts Shift) ──────────┐
-                        │                                                   │
-[draft] ──> [isolation_pending] ──> [active] ──> [daily_revalidated] ──> [daily_relinquished] ──> [closed]
+                                                     ┌────── Revalidate permit ──────┐
+                                                     │                               │
+[isolation_pending] ──> [active] ──> [daily_revalidated] ──> [daily_relinquished] ──> [closed]
 ```
 
 CAP (Non-Isolation) and CAP (Isolation) flow:
 ```
-                          ┌───── Daily Revalidation (Starts Shift) ───────┐
-                          │                                               │
-                       [active] ──> [daily_revalidated] ──> [daily_relinquished] ──> [closed]
+                          ┌───── Revalidate permit ───────┐
+                          │                               │
+                  [daily_revalidated] ──> [daily_relinquished] ──> [closed]
 ```
 
 Status descriptions:
-- `draft`: CMW only. Permit created, isolation tasks not yet added; permit holder need to create tasks and confirm to change status to 'isolation pending'.
-- `isolation_pending`: CMW only. Isolation tasks exist; workers need to provide 2 signatures per task (Isolated By, Verified By).
-- `active`: All isolation tasks are signed off (for CMW) or initial state of CAP. Daily Revalidation can begin.
-- `daily_revalidated`: Permit Issuer and Permit Holder have signed on (Revalidate permit); workers can sign on/off. Display label: "Daily Revalidated".
-- `daily_relinquished`: Permit Issuer and Permit Holder have signed off (Relinquish permit). Shift ended. Display label: "Daily Relinquished".
+- `isolation_pending`: CMW only. Workers need to provide 2 signatures per task (Isolated By, Verified By). If all tasks are signed, auto change to `active`.
+- `active`: All isolation tasks are signed off (for CMW) or initial state of CAP. Trigger by button [Re-open] next to the status. Daily Revalidation can begin.
+- `daily_revalidated`: Permit Issuer and Permit Holder have signed on (Revalidate permit); workers can sign on/off. Display status: "Daily Revalidated".
+- `daily_relinquished`: Permit Issuer and Permit Holder have signed off (Relinquish permit). Shift ended. Display label: "Daily Relinquished". Click [Revalidate permit] to change status to `daily_revalidated`.
 - `closed`: Permit holder has closed the permit. Read-only.
 
 ### Permit section hierarchy

@@ -7,11 +7,10 @@ export const PERMIT_TYPE_LABELS: Record<PermitType, string> = {
 };
 
 export const PERMIT_STATUS_LABELS: Record<PermitStatus, string> = {
-  draft: "Draft",
   isolation_pending: "Isolation Pending",
   active: "Active",
-  shift_open: "Daily Revalidated",
-  shift_closed: "Daily Relinquished",
+  daily_revalidated: "Daily Revalidated",
+  daily_relinquished: "Daily Relinquished",
   closed: "Closed",
 };
 

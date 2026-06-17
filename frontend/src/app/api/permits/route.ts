@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
           permitHolderId: true,
           createdAt: true,
         },
-        orderBy: { id: "desc" },
+        orderBy: { createdAt: "desc" },
       });
       return NextResponse.json(permits);
     }
@@ -24,12 +24,13 @@ export async function GET(req: NextRequest) {
     const permits = await prisma.permit.findMany({
       include: {
         permitHolder: true,
+        permitAcceptor: true,
         permitIssuer: true,
         isolationTasks: { include: { isolatedBy: true, verifiedBy: true, isolationPoints: { include: { signer: true } } } },
         shifts: { include: { workers: { include: { user: true } } }, orderBy: { id: "asc" } },
         shiftIsolationConfirmations: { include: { isolatedBy: true, verifiedBy: true }, orderBy: { cycleNumber: "asc" } },
       },
-      orderBy: { id: "desc" },
+      orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(permits);
   } catch {
@@ -40,13 +41,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { type, title, holderId, issuerId } = body as { type: string; title: string; holderId: string; issuerId: string };
+    const { type, title, holderId, acceptorId, issuerId } = body as { type: string; title: string; holderId: string; acceptorId: string; issuerId: string };
 
-    if (!title?.trim() || !holderId || !issuerId) {
-      return NextResponse.json({ error: "Title, holderId, and issuerId required" }, { status: 400 });
+    if (!title?.trim() || !holderId || !acceptorId || !issuerId) {
+      return NextResponse.json({ error: "Title, holderId, acceptorId, and issuerId required" }, { status: 400 });
     }
 
-    const initialStatus = type === "CMW" ? "draft" : "active";
+    const initialStatus = type === "CMW" ? "isolation_pending" : "active";
 
     const permit = await prisma.permit.create({
       data: {
@@ -55,11 +56,13 @@ export async function POST(req: NextRequest) {
         title: title.trim(),
         status: initialStatus,
         permitHolderId: holderId,
+        permitAcceptorId: acceptorId,
         permitIssuerId: issuerId,
         createdAt: new Date().toISOString(),
       },
       include: {
         permitHolder: true,
+        permitAcceptor: true,
         permitIssuer: true,
         isolationTasks: { include: { isolationPoints: true } },
         shifts: { include: { workers: { include: { user: true } } } },

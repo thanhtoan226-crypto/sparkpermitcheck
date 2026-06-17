@@ -3,11 +3,10 @@ export type UserRole = "spark_user" | "worker";
 export type PermitType = "CMW" | "CAP_NON_ISOLATION" | "CAP_ISOLATION";
 
 export type PermitStatus =
-  | "draft"
   | "isolation_pending"
   | "active"
-  | "shift_open"
-  | "shift_closed"
+  | "daily_revalidated"
+  | "daily_relinquished"
   | "closed";
 
 export type ShiftStatus = "revalidation_pending" | "open" | "closed" | string;
@@ -88,10 +87,13 @@ export type PermitData = {
   title: string;
   status: string;
   permitHolderId: string;
+  permitAcceptorId: string;
   permitIssuerId?: string;
   closedAt: string | null;
+  deletedAt: string | null;
   createdAt: string;
   permitHolder: { id: string; name: string; avatarColor: string };
+  permitAcceptor: { id: string; name: string; avatarColor: string };
   permitIssuer?: { id: string; name: string; avatarColor: string };
   isolationTasks: IsolationTaskData[];
   shifts: ShiftData[];

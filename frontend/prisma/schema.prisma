@@ -15,6 +15,7 @@ model User {
   workerId    String? // 6-digit number for workers
 
   heldPermits                Permit[] @relation("PermitHolder")
+  acceptedPermits            Permit[] @relation("PermitAcceptor")
   issuedPermits              Permit[] @relation("PermitIssuer")
   signedPoints               IsolationPoint[]
   shifts                     ShiftWorker[]
@@ -30,12 +31,15 @@ model Permit {
   id             String   @id
   type           String   // "CMW" | "CAP_NON_ISOLATION" | "CAP_ISOLATION"
   title          String
-  status         String   // "draft" | "isolation_pending" | "active" | "shift_open" | "shift_closed" | "closed"
+  status         String   // "isolation_pending" | "active" | "daily_revalidated" | "daily_relinquished" | "closed"
   permitHolderId String
   permitHolder   User     @relation("PermitHolder", fields: [permitHolderId], references: [id])
+  permitAcceptorId String
+  permitAcceptor   User     @relation("PermitAcceptor", fields: [permitAcceptorId], references: [id])
   permitIssuerId String
   permitIssuer   User     @relation("PermitIssuer", fields: [permitIssuerId], references: [id])
   closedAt       String?
+  deletedAt      String?
 
   isolationTasks              IsolationTask[]
   shifts                      Shift[]

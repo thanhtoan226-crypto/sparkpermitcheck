@@ -131,10 +131,9 @@
   @media (max-width: 640px) {
     .page-content {
       padding-inline: 1rem;         /* 16px */
-      border-radius: 0 0 1rem 1rem;
-      box-shadow:
-        0 1px 3px rgba(0, 0, 0, 0.05),
-        0 4px 12px rgba(0, 0, 0, 0.07);
+      border-radius: 0;
+      box-shadow: none;
+      min-height: calc(100dvh - 64px); /* assuming header is ~64px */
     }
   }
 
@@ -152,7 +151,55 @@
 
   @media (max-width: 640px) {
     .page-shell {
-      padding-block: 0.75rem; /* tighter on mobile */
+      padding-block: 0; /* Flush to top on mobile */
     }
+  }
+
+  /*
+   * .login-shell
+   * Specific wrapper for the login page
+   */
+  .login-shell {
+    min-height: 100dvh;
+    background: linear-gradient(180deg, #032147 0%, #052c5e 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .glass-card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 1.25rem;
+  }
+
+  .spark-button-group {
+    display: flex;
+    background: #f1f5f9;
+    padding: 0.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid #e2e8f0;
+  }
+
+  .spark-button-group-item {
+    flex: 1;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+  }
+
+  .spark-button-group-item.active {
+    background: #ffffff;
+    color: #032147;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  .spark-button-group-item:not(.active) {
+    color: #64748b;
   }
 }
